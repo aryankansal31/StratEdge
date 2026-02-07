@@ -29,99 +29,107 @@ def main():
     setup_page("Backtest", "🧪")
     render_sidebar()
     
-    st.markdown("## Configuration")
+    st.markdown("### 🛠️ Strategy Setup")
     
-    with st.form("backtest_config"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            underlying = st.selectbox("Underlying", ["NIFTY", "BANKNIFTY"], index=0)
-            capital = st.number_input("Initial Capital (₹)", value=100000.0, step=10000.0)
+    with st.container():
+        with st.form("backtest_config"):
+            col1, col2 = st.columns(2)
             
-        with col2:
-            # Default to last 30 days
-            default_start = datetime.now() - timedelta(days=30)
-            default_end = datetime.now()
+            with col1:
+                underlying = st.selectbox("Underlying Symbol", ["NIFTY", "BANKNIFTY"], index=0)
+                capital = st.number_input("Starting Capital (₹)", value=100000.0, step=10000.0)
+                
+            with col2:
+                # Default to last 30 days
+                default_start = datetime.now() - timedelta(days=30)
+                default_end = datetime.now()
+                
+                start_date = st.date_input("Analysis Start Date", value=default_start)
+                end_date = st.date_input("Analysis End Date", value=default_end)
+                
+            # Strategy and Options
+            c3, c4 = st.columns(2)
+            with c3:
+                strategy = st.selectbox("Strategy Architecture", ["Bull Call Spread", "Iron Condor (Coming Soon)"])
+            with c4:
+                use_calc_expiries = st.checkbox("High-Fidelity Weekly Expiries", value=True, help="Calculates theoretical expiry dates for historical accuracy")
             
-            start_date = st.date_input("Start Date", value=default_start)
-            end_date = st.date_input("End Date", value=default_end)
-            
-        # Strategy selection (Can be dynamic later)
-        strategy = st.selectbox("Strategy", ["Bull Call Spread", "Iron Condor (Coming Soon)"])
-        
-        use_calc_expiries = st.checkbox("Use Calculated Weekly Expiries (Recommended for history)", value=True)
-        
-        submitted = st.form_submit_button("🚀 Run Backtest")
+            st.markdown("<br>", unsafe_allow_html=True)
+            submitted = st.form_submit_button("🚀 Execute Strategic Analysis", use_container_width=True)
         
     if submitted:
         st.divider()
-        st.markdown("### ⏳ Running Backtest...")
         
         # Clear previous logs
         log_capture_string.truncate(0)
         log_capture_string.seek(0)
         
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        try:
-            # Convert dates to string format required by backtester
-            from_str = start_date.strftime("%Y-%m-%d")
-            to_str = end_date.strftime("%Y-%m-%d")
-            
-            status_text.text(f"Fetching data for {underlying} from {from_str} to {to_str}...")
-            progress_bar.progress(25)
-            
-            # Run Backtest
-            result_obj = run_backtest(
-                underlying=underlying,
-                from_date=from_str,
-                to_date=to_str,
-                use_calculated_expiries=use_calc_expiries
-            )
-            df_results = result_obj.to_dataframe()
-            
-            progress_bar.progress(100)
-            status_text.text("Backtest Complete!")
-            
-            if df_results.empty:
-                st.warning("No trades generated for this period.")
-            else:
-                if 'pnl_after_brokerage' in df_results.columns:
-                    df_results['pnl'] = df_results['pnl_after_brokerage']
-                st.success(f"Backtest Finished! Generated {len(df_results)} trades.")
+        with st.status("🔬 Performing Quantitative Analysis...", expanded=True) as status:
+            try:
+                # Convert dates to string format required by backtester
+                from_str = start_date.strftime("%Y-%m-%d")
+                to_str = end_date.strftime("%Y-%m-%d")
                 
-                # Metrics
-                total_pnl = df_results['pnl'].sum()
-                win_rate = (len(df_results[df_results['pnl'] > 0]) / len(df_results)) * 100
-                max_drawdown = df_results['pnl'].min() # Simple metric for now
+                st.write(f"📡 Fetching historical OHLCV for {underlying}...")
                 
-                m1, m2, m3, m4 = st.columns(4)
-                m1.metric("Total P&L", f"₹{total_pnl:,.2f}", delta_color="normal")
-                m2.metric("Win Rate", f"{win_rate:.1f}%")
-                m3.metric("Trades", len(df_results))
-                m4.metric("Max Loss (Single Trade)", f"₹{max_drawdown:,.2f}")
+                # Run Backtest
+                result_obj = run_backtest(
+                    underlying=underlying,
+                    from_date=from_str,
+                    to_date=to_str,
+                    use_calculated_expiries=use_calc_expiries
+                )
+                df_results = result_obj.to_dataframe()
                 
-                # Charts
-                tab1, tab2, tab3 = st.tabs(["📈 Equity Curve", "📊 P&L Distribution", "📝 Trade Log"])
+                status.update(label="✅ Analysis Complete!", state="complete", expanded=False)
                 
-                with tab1:
-                    plot_equity_curve(df_results, initial_capital=capital)
+                if df_results.empty:
+                    st.warning("No trades generated for the selected parameters.")
+                else:
+                    if 'pnl_after_brokerage' in df_results.columns:
+                        df_results['pnl'] = df_results['pnl_after_brokerage']
                     
-                with tab2:
-                    plot_pnl_distribution(df_results)
+                    st.success(f"Strategic model generated {len(df_results)} trades.")
                     
-                with tab3:
-                    st.dataframe(df_results, use_container_width=True)
+                    # Performance Metrics Dashboard
+                    st.markdown("### 📊 Performance Metrics")
                     
-        except Exception as e:
-            st.error(f"An error occurred during backtest: {str(e)}")
-            st.exception(e)
-            
-        finally:
-            # Show Logs
-            with st.expander("View Execution Logs"):
-                st.code(log_capture_string.getvalue())
+                    total_pnl = df_results['pnl'].sum()
+                    win_rate = (len(df_results[df_results['pnl'] > 0]) / len(df_results)) * 100
+                    max_loss = df_results['pnl'].min()
+                    profit_factor = abs(df_results[df_results['pnl'] > 0]['pnl'].sum() / df_results[df_results['pnl'] < 0]['pnl'].sum()) if not df_results[df_results['pnl'] < 0].empty else 0
+                    
+                    m1, m2, m3, m4 = st.columns(4)
+                    m1.metric("Net Cumulative P&L", format_currency(total_pnl), delta=f"{total_pnl:,.2f}")
+                    m2.metric("Strategic Win Rate", f"{win_rate:.1f}%")
+                    m3.metric("Total Executions", len(df_results))
+                    m4.metric("Risk Event (Max Loss)", format_currency(max_loss))
+                    
+                    # Specialized Analysis Tabs
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    tab1, tab2, tab3 = st.tabs(["📈 Equity Growth", "📊 P&L Distribution", "📝 Execution Journal"])
+                    
+                    with tab1:
+                        plot_equity_curve(df_results, initial_capital=capital)
+                        
+                    with tab2:
+                        plot_pnl_distribution(df_results)
+                        
+                    with tab3:
+                        st.dataframe(df_results.style.format({
+                            'pnl': '₹{:.2f}',
+                            'entry_price': '{:.2f}',
+                            'exit_price': '{:.2f}'
+                        }), use_container_width=True)
+                    
+            except Exception as e:
+                st.error(f"An error occurred during backtest: {str(e)}")
+                st.exception(e)
+                
+            finally:
+                # Show Logs
+                with st.expander("View Execution Logs"):
+                    st.code(log_capture_string.getvalue())
 
 if __name__ == "__main__":
     main()

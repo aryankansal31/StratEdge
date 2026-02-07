@@ -33,12 +33,29 @@ class SpreadPosition:
     entry_time: datetime
     exit_time: Optional[datetime] = None
     
-    # P&L
+    # P&L and Tracking
+    current_long_price: float = 0.0
+    current_short_price: float = 0.0
     exit_long_price: float = 0.0
     exit_short_price: float = 0.0
     realized_pnl: float = 0.0
     brokerage: float = 0.0
     
+    @property
+    def mtm(self) -> float:
+        """Calculate Unrealized P&L (Mark-to-Market)."""
+        if not self.is_open:
+            return 0.0
+            
+        # If current prices aren't set, return 0
+        if not self.current_long_price or not self.current_short_price:
+            return 0.0
+            
+        entry_value = (self.long_price - self.short_price) * self.quantity * self.lot_size
+        current_value = (self.current_long_price - self.current_short_price) * self.quantity * self.lot_size
+        
+        return current_value - entry_value
+
     @property
     def net_debit(self) -> float:
         """Net debit per lot at entry."""

@@ -103,7 +103,18 @@ class LiveTrader:
         market_data = self._get_market_data(now)
         if not market_data:
             return
-        
+            
+        # Update MTM for open positions
+        for position in position_manager.get_open_positions():
+            # Get latest prices from stream
+            long_ltp = stream_manager.get_latest_ltp(position.long_symbol)
+            short_ltp = stream_manager.get_latest_ltp(position.short_symbol)
+            
+            if long_ltp:
+                position.current_long_price = long_ltp
+            if short_ltp:
+                position.current_short_price = short_ltp
+
         # Check for entry
         if not position_manager.has_open_positions():
             if self.strategy.should_enter(market_data):
@@ -167,7 +178,7 @@ class LiveTrader:
         if not orders:
             LOG.warning("No entry orders generated")
             return
-        
+            
         # Place orders
         records = order_manager.place_orders(orders, slippage=settings.slippage_points)
         
@@ -178,17 +189,33 @@ class LiveTrader:
         if not buy_record or not sell_record:
             LOG.error("Failed to place both legs")
             return
-        
-        # In paper mode, simulate fill prices
+            
+        # In paper mode, use actual market prices from data or stream if available
         if self.mode == "PAPER":
-            buy_strike = self.strategy.buy_strike
-            sell_strike = self.strategy.sell_strike
+            # Try to get latest prices from stream first for better fidelity
+            # However, during entry, we might not have subscribed yet.
+            # But the order placement logic might have fetched some data.
             
-            buy_price = max(10, market_data.spot_price - buy_strike) + 20
-            sell_price = max(5, market_data.spot_price - sell_strike) + 10
+            # Subscribe immediately so we start receiving ticks for these legs
+            stream_manager.subscribe([buy_record.order.symbol, sell_record.order.symbol])
             
-            buy_record.fill_price = buy_price + settings.slippage_points
-            sell_record.fill_price = sell_price - settings.slippage_points
+            # Give it a tiny bit of time to get at least one tick? 
+            # Or just use the ticker data from fetcher as fallback
+            buy_ltp = stream_manager.get_latest_ltp(buy_record.order.symbol)
+            sell_ltp = stream_manager.get_latest_ltp(sell_record.order.symbol)
+            
+            # If stream ticks not yet arrived, use a simulated price based on spot
+            if not buy_ltp or not sell_ltp:
+                buy_strike = self.strategy.buy_strike
+                sell_strike = self.strategy.sell_strike
+                buy_ltp = max(10, market_data.spot_price - buy_strike) + 20
+                sell_ltp = max(5, market_data.spot_price - sell_strike) + 10
+            
+            buy_record.fill_price = buy_ltp + settings.slippage_points
+            sell_record.fill_price = sell_ltp - settings.slippage_points
+        else:
+            # LIVE mode: subscribe after placing 
+            stream_manager.subscribe([buy_record.order.symbol, sell_record.order.symbol])
         
         # Open position
         lot_size = instrument_manager.get_lot_size(market_data.underlying)
@@ -220,12 +247,20 @@ class LiveTrader:
         # Place orders
         records = order_manager.place_orders(orders, slippage=settings.slippage_points)
         
-        # Get fill prices (simulated in paper mode)
-        sell_record = next((r for r in records if r.order.side.value == "SELL"), None)
-        buy_record = next((r for r in records if r.order.side.value == "BUY"), None)
-        
-        exit_long = position.long_price * 0.95  # Simulate time decay
-        exit_short = position.short_price * 0.95
+        # Get fill prices (use latest from stream for PAPER)
+        if self.mode == "PAPER":
+            exit_long = stream_manager.get_latest_ltp(position.long_symbol) or position.current_long_price
+            exit_short = stream_manager.get_latest_ltp(position.short_symbol) or position.current_short_price
+            
+            # Apply slippage
+            exit_long = exit_long - settings.slippage_points
+            exit_short = exit_short + settings.slippage_points
+        else:
+            # In live, we'd ideally get fill prices from order records
+            sell_record = next((r for r in records if r.order.symbol == position.long_symbol), None)
+            buy_record = next((r for r in records if r.order.symbol == position.short_symbol), None)
+            exit_long = sell_record.fill_price if sell_record else position.current_long_price
+            exit_short = buy_record.fill_price if buy_record else position.current_short_price
         
         # Close position
         pnl = position_manager.close_spread(
@@ -234,6 +269,9 @@ class LiveTrader:
             exit_short=exit_short,
             brokerage=settings.brokerage_per_order * 2
         )
+        
+        # Unsubscribe from these symbols
+        stream_manager.unsubscribe([position.long_symbol, position.short_symbol])
         
         LOG.info(f"Exit executed: P&L = {format_currency(pnl)}")
     
