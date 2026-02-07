@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+trading_env/
+venv/
+ENV/
+
+# Environment files
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.amazonq
+groww docs
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs and Output
+*.log
+logs/
+*.csv
+!.env.example
+_archive
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (legacy)
+Secrets.txt
+config.py
