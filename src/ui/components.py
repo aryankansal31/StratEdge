@@ -9,14 +9,15 @@ def apply_custom_style():
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
         
-        * {
-            font-family: 'Inter', sans-serif !important;
-        }
-        
         /* Main Container Styling */
         .main {
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             color: #f8fafc;
+        }
+
+        /* Hide Default Sidebar Navigation */
+        [data-testid="stSidebarNav"] {
+            display: none !important;
         }
         
         /* Sidebar Styling */
@@ -25,19 +26,29 @@ def apply_custom_style():
             border-right: 1px solid rgba(255, 255, 255, 0.1);
         }
         
-        /* Glassmorphism Effect for Containers */
-        .stMetric, .stAlert, .block-container div[data-testid="stVerticalBlock"] > div {
-            background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(8px);
-            border-radius: 12px;
-            padding: 1rem;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: transform 0.2s ease-in-out;
+        /* Glassmorphism Effect for specific containers */
+        .stMetric, [data-testid="stExpander"], [data-testid="stVerticalBlockBordered"] {
+            background: rgba(30, 41, 59, 0.4) !important;
+            backdrop-filter: blur(10px) !important;
+            border-radius: 12px !important;
+            padding: 1rem !important;
+            border: 1px solid rgba(255, 255, 255, 0.05) !important;
+            box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.2) !important;
+            margin-bottom: 0.8rem !important;
         }
         
+        /* Metric Hover Effect */
         .stMetric:hover {
-            transform: translateY(-2px);
-            border: 1px solid rgba(0, 204, 150, 0.3);
+            border: 1px solid rgba(0, 204, 150, 0.3) !important;
+            background: rgba(30, 41, 59, 0.7) !important;
+        }
+
+        /* Form Container fix */
+        [data-testid="stForm"] {
+            background: rgba(15, 23, 42, 0.5) !important;
+            border-radius: 16px !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            padding: 2rem !important;
         }
         
         /* Custom Button Styling */
@@ -86,6 +97,12 @@ def apply_custom_style():
             border: 0 !important;
             border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
         }
+
+        /* 
+           DO NOT OVERWRITE SYSTEM FONTS 
+           Removing body/button/span font-family overrides to ensure Streamlit's 
+           Material Icons and Phosphor icons render correctly.
+        */
         </style>
     """, unsafe_allow_html=True)
 
@@ -94,7 +111,7 @@ def setup_page(title: str, icon: str = "📈"):
     Common page setup configuration.
     """
     st.set_page_config(
-        page_title=f"Trading Bot - {title}",
+        page_title=f"StratEdge - {title}",
         page_icon=icon,
         layout="wide",
         initial_sidebar_state="expanded"
@@ -103,9 +120,12 @@ def setup_page(title: str, icon: str = "📈"):
     
     # Custom Header with Gradient Text
     st.markdown(f"""
-        <h1 style='background: linear-gradient(90deg, #ffffff 0%, #94a3b8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;'>
-            {icon} {title}
-        </h1>
+        <div style='display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem;'>
+            <span style='font-size: 2.5rem;'>{icon}</span>
+            <h1 style='margin: 0; font-family: "Inter", sans-serif; background: linear-gradient(90deg, #ffffff 0%, #94a3b8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: inline-block;'>
+                {title}
+            </h1>
+        </div>
     """, unsafe_allow_html=True)
 
 def render_metric_card(label: str, value: str, delta: Optional[str] = None):
@@ -118,19 +138,11 @@ def render_sidebar():
     """
     with st.sidebar:
         st.markdown(f"""
-            <div style='text-align: center; padding: 1rem 0;'>
-                <h2 style='margin: 0;'>🤖 Trading Bot</h2>
-                <p style='color: #64748b; font-size: 0.8rem;'>Precision Algorithm Suite</p>
+            <div style='text-align: center; padding: 1.5rem 0; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);'>
+                <h2 style='margin: 0; color: #ffffff;'>🤖 StratEdge</h2>
+                <p style='color: #64748b; font-size: 0.8rem; margin: 0.5rem 0 0 0;'>Precision Algorithm Suite</p>
             </div>
         """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
-        # Navigation
-        st.markdown("### 🧭 Navigation")
-        st.page_link("app.py", label="Home Dashboard", icon="🏠")
-        st.page_link("pages/1_Backtest.py", label="Backtesting Suite", icon="🧪")
-        st.page_link("pages/2_Live_Trading.py", label="Live Monitor", icon="⚡")
         
         st.markdown("---")
         
@@ -139,7 +151,7 @@ def render_sidebar():
         st.success("🟢 Ready")
         
         st.markdown("---")
-        st.caption("Developed for Professional Trading")
+        st.caption("Developed for Testing your Strategies")
 
 def plot_equity_curve(df_trades: pd.DataFrame, initial_capital: float = 100000.0):
     """

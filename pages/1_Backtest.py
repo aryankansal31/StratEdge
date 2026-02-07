@@ -12,6 +12,7 @@ sys.path.append(str(project_root))
 
 from src.ui.components import setup_page, render_sidebar, plot_equity_curve, plot_pnl_distribution
 from src.engine.backtester import run_backtest
+from src.utils import format_currency
 
 
 # Setup Logging Capture
