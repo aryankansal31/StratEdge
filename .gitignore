@@ -21,6 +21,8 @@ ENV/
 .idea/
 *.swp
 *.swo
+.amazonq
+groww docs
 
 # Jupyter
 .ipynb_checkpoints/
@@ -31,6 +33,7 @@ ENV/
 logs/
 *.csv
 !.env.example
+_archive
 
 # OS
 .DS_Store

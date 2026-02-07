@@ -10,7 +10,7 @@ from typing import Optional
 from datetime import datetime
 
 from ..config import settings
-from ..api import client
+from ..api import client, stream_manager
 from ..data import live_fetcher, historical_fetcher, instrument_manager
 from ..strategies import BaseStrategy, MarketData, BullCallSpreadStrategy
 from ..execution import order_manager, position_manager
@@ -42,11 +42,21 @@ class LiveTrader:
         LOG.info(f"Starting live trader in {self.mode} mode")
         self._running = True
         
+        # Connect to stream
+        LOG.info("🔌 Connecting to data stream...")
+        stream_manager.connect()
+        
+        # Subscribe to underlying
+        # Note: We need to know the correct symbol format for subscription
+        # For now assuming "NSE:NIFTY" or similar based on API
+        # Or just passing the underlying name if the manager handles formatting
+        stream_manager.subscribe([f"NSE_{self.underlying}"])
+        
         # Schedule entry and exit checks
         schedule.every().second.do(self.check_trading_window)
         
         LOG.info(f"Strategy: {self.strategy.name}")
-        LOG.info(f"Underlying: {settings.underlying}")
+        LOG.info(f"Underlying: {self.underlying}")
         LOG.info(f"Entry Time: {settings.entry_time}")
         LOG.info(f"Exit Time: {settings.exit_time}")
         
@@ -66,6 +76,12 @@ class LiveTrader:
         """Stop the trading engine."""
         self._running = False
         LOG.info("Live trader stopped")
+        
+        # Disconnect stream
+        try:
+            stream_manager.disconnect()
+        except:
+            pass
         
         # Close any open positions
         if position_manager.has_open_positions():
@@ -104,8 +120,13 @@ class LiveTrader:
         try:
             underlying = self.underlying
             
-            # Get spot price
-            spot = live_fetcher.get_spot_ltp(underlying)
+            # Try to get spot from stream first
+            spot = stream_manager.get_latest_ltp(f"NSE_{underlying}")
+            
+            # Fallback to polling if stream data missing
+            if not spot:
+                spot = live_fetcher.get_spot_ltp(underlying)
+                
             if not spot:
                 return None
             
